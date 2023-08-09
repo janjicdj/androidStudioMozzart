@@ -1,15 +1,13 @@
 package com.example.weather
 
 import android.Manifest
-import android.R
 import android.content.DialogInterface
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Looper
 import android.util.Log
 import android.view.View
-import android.widget.Button
-import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -27,21 +25,32 @@ import com.google.android.gms.location.LocationServices
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import androidx.appcompat.widget.Toolbar
+import android.view.Menu
+import android.view.MenuItem
+import com.google.gson.Gson
+import org.json.JSONObject
+
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var fusedLocationProviderClient: FusedLocationProviderClient? = null
     private var client = NetworkClient()
+    private lateinit var toolbar: Toolbar
+    private var weatherTime: WeatherTime? = null
+    private var jsonWeatherTime: JSONObject? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        toolbar = binding.toolbar
+        setSupportActionBar(toolbar)
+
         fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this)
 
         binding.button.setOnClickListener {
-            Log.i("des", "usli smo")
             val latitude = binding.latitutetxt.text.toString()
             val longitude = binding.longitude.text.toString()
             if (latitude != "" && longitude != "" && latitude.toDouble() <= 90 && longitude.toDouble() < 180) {
@@ -53,7 +62,37 @@ class MainActivity : AppCompatActivity() {
                 binding.label.text = "Nepravilan unos"
             }
         }
+        binding.button2.setOnClickListener {
+            requestLocationUpdates()
+        }
 
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_main, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.action_item1 -> {
+                val intent = Intent(this, Details::class.java)
+                val gson = Gson()
+                val json = gson.toJson(weatherTime)
+                intent.putExtra("json_data", json)
+                startActivity(intent)
+                return true
+            }
+
+            R.id.action_item2 -> {
+                val intent = Intent(this, DetailsActivity::class.java)
+                intent.putExtra("WeatherTime", weatherTime)
+                startActivity(intent)
+                return true
+            }
+
+            else -> return super.onOptionsItemSelected(item)
+        }
     }
 
     private val locationRequest = LocationRequest.create().apply {
@@ -71,21 +110,26 @@ class MainActivity : AppCompatActivity() {
                     forecast(latitude, longitude)
                 }
             }
+            fusedLocationProviderClient?.removeLocationUpdates(this)
+
         }
     }
 
     private fun forecast(latitude: Double, longitude: Double) {
+        binding.latitutetxt.setText(latitude.toString())
+        binding.longitude.setText(longitude.toString())
+
         client.getForecast(latitude, longitude)
             .enqueue(object : Callback<WeatherTime> {
                 override fun onResponse(
                     call: Call<WeatherTime>,
                     response: Response<WeatherTime>
                 ) {
-                    binding.progress.visibility=View.GONE
+                    binding.progress.visibility = View.GONE
                     if (response.isSuccessful) {
-                        val data = response.body()
+                        weatherTime = response.body()
                         binding.label.text =
-                            "${data?.currentWeather?.temperature} C"
+                            "${weatherTime?.currentWeather?.temperature} C"
                     } else {
                         binding.label.text =
                             "Response code: ${response.code()}, ${response.errorBody()}"
@@ -144,15 +188,12 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            Log.i("des", "bilding.progress.visibility${binding.progress.visibility}")
-            binding.progress.visibility= View.VISIBLE
+            binding.progress.visibility = View.VISIBLE
             fusedLocationProviderClient?.requestLocationUpdates(
                 locationRequest,
                 locationCallback,
                 Looper.getMainLooper()
             )
-            Log.i("des", "$locationRequest")
-            Log.i("des", "$locationCallback")
         }
     }
 
